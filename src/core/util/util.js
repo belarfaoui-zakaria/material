@@ -40,114 +40,53 @@ angular.module('material.core')
       return Util.clientRect(element, offsetParent, true);
     },
     disableScrollAround: function(element) {
-      var parentContent = element instanceof angular.element ? element[0] : element;
-      var lastParent;
-      var disableTarget, scrollEl, useDocElement;
-      while (parentContent = this.getClosest(parentContent, 'MD-CONTENT', true)) {
-        if (isScrolling(parentContent)) {
-          disableTarget = angular.element(parentContent);
-        } else {
-          lastParent = parentContent;
+      var parentEl = element instanceof angular.element ? element[0] : element;
+      var disableTarget, scrollOffset, restoreStyle, restoreParentStyle;
+
+
+      while (parentEl = this.getClosest(parent, 'MD-CONTENT', true)) {
+        if (isScrolling(parentEl)) {
+          disableTarget = angular.element(parent);
         }
       }
       if (!disableTarget) {
-        if (!lastParent ||
-          $document[0].body.scrollTop || $document[0].documentElement.scrollTop ) {
-          disableTarget = angular.element($document[0].body);
-        } else {
-          disableTarget = angular.element(lastParent);
-        }
+        disableTarget = $document[0].body;
       }
+      parentEl = disableTarget.parentNode;
+      scrollOffset = disableTarget.scrollTop;
 
-      if (disableTarget[0].nodeName == 'BODY' && $document[0].documentElement.scrollTop) {
-        scrollEl = $document[0].documentElement;
-        useDocElement = true;
+      if (!isScrolling(disableTarget)) return angular.noop;
+
+      if (disableTarget.nodeName == 'BODY') {
+        return disableBody();
       } else {
-        scrollEl = disableTarget[0];
+        return disableElement();
       }
 
-      var heightOffset = scrollEl.scrollTop;
-      var originalWidth = scrollEl.clientWidth;
-
-      var restoreStyle = disableTarget.attr('style');
-      var disableStyle = $window.getComputedStyle(disableTarget[0]);
-      var wrapperEl = angular.element('<div class="md-virtual-scroll-container"><div class="md-virtual-scroller"></div></div>');
-      var virtualScroller = wrapperEl.children().eq(0);
-      virtualScroller.append(disableTarget[0].childNodes);
-      disableTarget.append(wrapperEl);
-      var originalScrollBarShow = originalWidth < scrollEl.clientWidth;
-
-      computeScrollbars(disableStyle);
-
-      virtualScroller.attr('layout-margin', disableTarget.attr('layout-margin'));
-      virtualScroller.css({
-        display: disableStyle.display,
-        '-webkit-flex-direction': disableStyle.webkitFlexDirection,
-        '-ms-flex-direction': disableStyle.msFlexDirection,
-        'flex-direction': disableStyle.flexDirection,
-        '-webkit-align-items': disableStyle.webkitAlignItems,
-        '-ms-flex-align': disableStyle.msFlexAlign,
-        'align-items': disableStyle.alignItems,
-        '-webkit-justify-content': disableStyle.webkitJustifyContent,
-        '-ms-flex-pack': disableStyle.msFlexPack,
-        'justify-content': disableStyle.justifyContent,
-        '-webkit-flex': disableStyle.webkitFlex,
-        '-ms-flex': disableStyle.msFlex,
-        flex: disableStyle.flex
-      });
-      if (/flex$/.test(disableStyle.display)) {
-        virtualScroller.css('height', '100%');
+      function disableElement() {
       }
 
-      computeSize();
+      function disableBody() {
+        restoreStyle = disableTarget.getAttribute('style') || '';
 
-      angular.element($window).on('resize', computeSize);
-
-      function computeSize() {
-        if (restoreStyle) {
-          disableTarget.attr('style', restoreStyle);
-        } else {
-          disableTarget[0].removeAttribute('style');
-        }
-        virtualScroller.css('position', 'static');
-        var computedStyle = $window.getComputedStyle(disableTarget[0]);
-        computeScrollbars(computedStyle);
-        var innerWidth = disableTarget[0].clientWidth;
-        if (computedStyle.boxSizing == 'border-box') {
-          innerWidth -= parseFloat(computedStyle.paddingLeft, 10);
-          innerWidth -= parseFloat(computedStyle.paddingRight, 10);
-        }
-        wrapperEl.css({
-          'max-width': innerWidth + 'px'
+        applyStyles(disableTarget, {
+          position: 'fixed',
+          width: '100%',
+          overflowY: 'scroll',
+          transform: 'translateY(-' + scrollOffset + 'px)',
+          '-webkit-transform': 'translateY(-' + scrollOffset + 'px)'
         });
-        disableTarget.css('position', 'relative');
-        virtualScroller.css('position', 'absolute');
+
+        return function restoreScroll() {
+          disableTarget.setAttribute('style', restoreStyle);
+          disableTarget.scrollTop = scrollOffset;
+        };
       }
 
-      function computeScrollbars(computedStyle) {
-        var scrollBarsShowing = !Util.floatingScrollbars()
-            && computedStyle.overflowY != 'hidden'
-            && (
-              virtualScroller[0].clientHeight > scrollEl.clientHeight
-              || originalScrollBarShow
-            );
-
-        var scrollerOffset = -1 * (heightOffset - parseFloat(disableStyle.paddingTop, 10));
-        disableTarget.css('padding-top', '0px');
-
-        if (scrollBarsShowing) {
-          disableTarget.css('overflow-y', 'scroll');
+      function applyStyles (el, styles) {
+        for (var key in styles) {
+          el.style[key] = styles[key];
         }
-        virtualScroller.css('top', scrollerOffset + 'px');
-
-        var innerHeight = parseFloat(computedStyle.height, 10);
-        if (computedStyle.boxSizing == 'border-box') {
-          innerHeight -= parseFloat(computedStyle.paddingTop, 10);
-          innerHeight -= parseFloat(computedStyle.paddingBottom, 10);
-        }
-
-        wrapperEl.css('height', innerHeight + 'px');
-        return scrollBarsShowing;
       }
 
       function isScrolling(el) {
@@ -155,17 +94,6 @@ angular.module('material.core')
         return el.scrollHeight > el.offsetHeight;
       }
 
-      return function restoreScroll() {
-        disableTarget.append(virtualScroller[0].childNodes);
-        wrapperEl.remove();
-        angular.element($window).off('resize', computeSize);
-        disableTarget.attr('style', restoreStyle || false);
-        if (useDocElement) {
-          $document[0].documentElement.scrollTop = heightOffset;
-        } else {
-          disableTarget[0].scrollTop = heightOffset;
-        }
-      };
     },
 
     floatingScrollbars: function() {
