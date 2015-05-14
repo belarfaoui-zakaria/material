@@ -40,33 +40,67 @@ angular.module('material.core')
       return Util.clientRect(element, offsetParent, true);
     },
     disableScrollAround: function(element) {
-      var parentEl = element instanceof angular.element ? element[0] : element;
-      var disableTarget, scrollOffset, restoreStyle, restoreParentStyle;
+      element = element instanceof angular.element ? element[0] : element;
+      var parentEl = element;
+      var disableTarget, scrollOffset, restoreStyle;
 
 
-      while (parentEl = this.getClosest(parent, 'MD-CONTENT', true)) {
+      while (parentEl = this.getClosest(parentEl, 'MD-CONTENT', true)) {
         if (isScrolling(parentEl)) {
-          disableTarget = angular.element(parent);
+          disableTarget = angular.element(parentEl)[0];
         }
       }
       if (!disableTarget) {
         disableTarget = $document[0].body;
       }
-      parentEl = disableTarget.parentNode;
       scrollOffset = disableTarget.scrollTop;
 
       if (!isScrolling(disableTarget)) return angular.noop;
 
       if (disableTarget.nodeName == 'BODY') {
-        return disableBody();
+        return disableBodyScroll();
       } else {
-        return disableElement();
+        return disableElementScroll();
       }
 
-      function disableElement() {
+      function disableElementScroll() {
+        var scrollMask = angular.element('<div class="md-scroll-mask">');
+        var computedStyle = $window.getComputedStyle(disableTarget);
+        var disableRect = disableTarget.getBoundingClientRect();
+        applyStyles(scrollMask[0], {
+          position: 'absolute',
+          zIndex: computedStyle.zIndex == 'auto' ? 2 : computedStyle.zIndex + 1,
+          width: disableRect.width + 'px',
+          height: disableRect.height + 'px',
+          top: disableRect.top + 'px',
+          left: disableRect.left + 'px',
+          backgroundColor: 'transparent'
+        });
+        $document[0].body.appendChild(scrollMask[0]);
+        scrollMask.on('wheel', function(e) {
+          e.preventDefault();
+        });
+        scrollMask.on('touchmove', function(e) {
+          e.preventDefault();
+        });
+        $document.on('keydown', disableKeyNav);
+
+        return function restoreScroll() {
+          scrollMask.off('wheel');
+          scrollMask.off('touchmove');
+          scrollMask[0].parentNode.removeChild(scrollMask[0]);
+          $document.off('keydown', disableKeyNav);
+        };
+
+        function disableKeyNav(e) {
+          if (disableTarget.contains(e.target)) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+        }
       }
 
-      function disableBody() {
+      function disableBodyScroll() {
         restoreStyle = disableTarget.getAttribute('style') || '';
 
         applyStyles(disableTarget, {
